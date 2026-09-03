@@ -21,7 +21,8 @@
     "build": "tsc -p tsconfig.build.json && chmod +x dist/bin.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "checks": "pnpm typecheck && pnpm test"
+    "checks": "pnpm typecheck && pnpm test",
+    "prepublishOnly": "pnpm run checks && test -f dist/bin.js && test -f dist/index.js"
   },
   "peerDependencies": {
     "@nizos/probity": ">=1.10.0"
