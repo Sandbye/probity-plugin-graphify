@@ -4,13 +4,18 @@ import { execFileSync } from 'node:child_process'
  * Shell idioms that mutate a file. An agent told to prefer the shell edits
  * with these instead of the Write/Edit tools, and a rule that only watches
  * write actions then sees an empty session while the tree changes (#shell-write).
+ *
+ * A bare heredoc is deliberately NOT one of them. `git commit -F - <<'EOF'`
+ * feeds a command's stdin and writes no file, and flagging it cost twice: the
+ * commit was blocked, and the heredoc then counted as a mutation that
+ * invalidated an already-green test run (#heredoc). A heredoc that does write
+ * a file still matches through its writer: `cat > f`, `tee f`, or an inline
+ * script calling write_text, all of which appear in the same command text.
  */
 export const SHELL_WRITE = new RegExp(
   [
     // a redirect into a path: `cat > f`, `printf x >> f`
     String.raw`(?:^|[;&|]|\s)(?:cat|printf|echo)\b[^;&|]*?(?<![-=<])>>?\s*(?!&\d)(?!/dev/null)\S`,
-    // a heredoc, which is how an inline script or file body is passed
-    String.raw`<<\s*'?[A-Za-z_]+'?\s*$`,
     // `tee f`, which writes its path arguments
     String.raw`\btee\s+(?!-)(?!/dev/null)\S`,
     String.raw`\bsed\s+(?:-[^\s]*\s+)*-i`,

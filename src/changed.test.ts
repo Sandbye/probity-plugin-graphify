@@ -11,7 +11,7 @@ describe('isShellWrite', () => {
     "cat > a.ts <<'EOF'",
     'sed -i "" s/a/b/ src/a.ts',
     'sed -i.bak s/a/b/ src/a.ts',
-    "python3 - <<'PY'",
+    "python3 - <<'PY'\nPath('a.ts').write_text('x')\nPY",
     'printf "x" > src/a.ts',
     'echo hi >> notes.md',
     'tee src/a.ts < in.txt',
@@ -27,6 +27,9 @@ describe('isShellWrite', () => {
     'node --version',
     'echo hi',
     'diff a b',
+    // a heredoc feeding a command's stdin writes no file
+    "git commit -F - <<'EOF'\nfix: something\nEOF",
+    "gh pr create --body-file - <<'EOF'\nbody\nEOF",
   ])('leaves %s alone', (command) => expect(isShellWrite(command)).toBe(false))
 })
 
