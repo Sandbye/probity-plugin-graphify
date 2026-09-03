@@ -143,9 +143,11 @@ Blocks a write to a source file that **no** test reaches. Paired with `enforceTd
 
 ### `forbidShellFileWrites(options?)`
 
-Blocks shell file mutation (`cat > f`, heredocs, `sed -i`, inline scripts calling `write_text`) so edits go through the Write and Edit tools, where every write-gated rule can see them.
+Blocks shell file mutation (`cat > f`, heredocs, `sed -i`, `tee`, inline scripts calling `write_text`) so edits go through the Write and Edit tools, where every write-gated rule can see them.
 
-This is not hypothetical. With Claude Code's auto mode active, the agent is told to make file changes through the shell. In run 2 above, all 42 tool calls were `Bash`, zero were `Write` or `Edit`, and every write-gated rule including Probity's own `enforceTdd` saw an idle session while three files changed and a commit landed.
+The bypass is real, not hypothetical. With Claude Code's auto mode active the agent is told to make file changes through the shell: in run 2 above, all 42 tool calls were `Bash`, zero were `Write` or `Edit`, and every write-gated rule including Probity's own `enforceTdd` saw an idle session while three files changed and a commit landed.
+
+**This rule is a stopgap, and a weak one.** Probity [issue #62](https://github.com/nizos/probity/issues/62) already tracks the underlying gap and argues for first-class command-to-write mapping inside Probity, with a better analysis than this regex: tokenizing the command into argv, following `bash -c` payloads, and stripping wrapper prefixes. Measured against the shapes that issue lists, this rule catches 7 of 15. It misses `perl -i`, `awk` into a file, `dd of=`, `cp`, `git apply`, `sed --in-place`, `python -c open()`, and anything wrapped in `bash -c`. Use it as a speed bump against the auto-mode default, not as a security boundary, and watch #62 for the real fix.
 
 ### `probity-graphify stop`
 
@@ -162,6 +164,7 @@ Every path fails **open**. No graph, an unreadable graph, a `graph.json` in a fo
 - **Workspace packages that export `dist`** need either tsconfig `paths` (tRPC has them) or a `"source": "./src/index.ts"` condition in `exports`, or cross-package reach is invisible. Adding that condition is inert for node and tsc.
 - **The graph lags the session.** A test written this session is handled; a new *caller* added this session is not seen until `graphify update` runs.
 - **`enforceTdd` costs a turn** per write in scope, around 5s. These rules cost nothing.
+- **`forbidShellFileWrites` catches 7 of the 15 shell-write shapes** listed in Probity issue #62. A speed bump, not a boundary.
 
 ## Versions
 
