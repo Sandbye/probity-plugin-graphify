@@ -60,7 +60,7 @@ export function requireImpactedTests(options: RequireImpactedTestsOptions = {}):
 
     const since = lastWriteIndex(history, graph, options.testFile)
 
-    const outstanding = unverified(history, impacted, since, options)
+    const outstanding = unverified(history, impacted, since, options, graph.root)
     if (outstanding.length === 0) return { kind: 'pass' }
 
     const files = outstanding.map((hit) => hit.file)

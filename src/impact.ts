@@ -1,4 +1,4 @@
-import { basename } from 'node:path'
+import { basename, relative } from 'node:path'
 import { changedFiles, changedRangesFor, isShellWrite } from './changed.js'
 import { isTestFile, reachingTests, relativize, type Graph, type Reaching } from './graph.js'
 
@@ -91,6 +91,7 @@ export function ranGreenSince(
   files: readonly string[],
   since: number,
   options: ImpactOptions = {},
+  root?: string,
 ): boolean {
   const fullSuite = options.fullSuite ?? DEFAULT_FULL_SUITE
   const failure = options.failure ?? DEFAULT_FAILURE
@@ -100,7 +101,7 @@ export function ranGreenSince(
     if (event.kind !== 'command' || !testRunner.test(event.command)) continue
     if (failure.test(event.output)) continue
     if (fullSuite.test(event.command)) return true
-    for (const file of outstanding) if (mentions(event.command, file)) outstanding.delete(file)
+    for (const file of outstanding) if (mentions(event.command, file, root)) outstanding.delete(file)
     if (outstanding.size === 0) return true
   }
   return outstanding.size === 0
@@ -112,20 +113,30 @@ export function unverified(
   impacted: readonly Reaching[],
   since: number,
   options: ImpactOptions = {},
+  root?: string,
 ): Reaching[] {
-  return impacted.filter((hit) => !ranGreenSince(events, [hit.file], since, options))
+  return impacted.filter((hit) => !ranGreenSince(events, [hit.file], since, options, root))
 }
 
 /**
  * Does `command` name `file`, directly or through a directory it sits under?
  * `vitest run packages/tests` runs every test beneath that path, so a
  * per-file check alone under-counts what already ran (#dir-args).
+ *
+ * Absolute tokens are mapped back to repo-relative first. An agent that runs
+ * `cd /abs/path/to/pkg && go test ./...` names the directory only in absolute
+ * form, and comparing that to a repo-relative file credited nothing, so the
+ * gate demanded a re-run of tests that had just passed (#abs-cwd).
  */
-function mentions(command: string, file: string): boolean {
+function mentions(command: string, file: string, root?: string): boolean {
   if (command.includes(file) || command.includes(basename(file))) return true
-  return command
-    .split(/\s+/)
-    .some((token) => token.length > 1 && !token.startsWith('-') && file.startsWith(stripTrailingSlash(token) + '/'))
+  return command.split(/\s+/).some((raw) => {
+    const token = stripTrailingSlash(raw)
+    if (token.length < 2 || token.startsWith('-')) return false
+    const candidates = [token]
+    if (root && token.startsWith(root)) candidates.push(relative(root, token))
+    return candidates.some((candidate) => candidate.length > 0 && file.startsWith(candidate + '/'))
+  })
 }
 
 function stripTrailingSlash(token: string): string {

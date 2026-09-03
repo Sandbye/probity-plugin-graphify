@@ -127,6 +127,13 @@ describe('requireImpactedTests', () => {
     expect(result.kind).toBe('violation')
   })
 
+  it('credits a run whose only path reference is an absolute cwd', async () => {
+    // cd /root/src && go test ./...  names the directory in absolute form only.
+    const command = `cd ${root}/src && go test ./...`
+    const result = await rule(commit, ctx(write('src/cart.ts'), ran(command)))
+    expect(result.kind).toBe('pass')
+  })
+
   it('honours a custom runner and gate', async () => {
     const custom = requireImpactedTests({ graph, ignoreGit: true, before: /git push/, runner: 'pytest {files}' })
     expect((await custom(commit, ctx(write('src/cart.ts')))).kind).toBe('pass')

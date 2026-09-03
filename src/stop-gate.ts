@@ -59,7 +59,7 @@ export function decide(events: readonly Event[], options: StopGateOptions = {}, 
   if (impacted.length === 0) return { kind: 'allow', reason: 'nothing changed that a test reaches' }
 
   const since = lastWriteIndex(events, graph, options.testFile)
-  const outstanding = unverified(events, impacted, since, options)
+  const outstanding = unverified(events, impacted, since, options, graph.root)
   if (outstanding.length === 0) return { kind: 'allow' }
 
   const files = outstanding.map((hit) => hit.file)
