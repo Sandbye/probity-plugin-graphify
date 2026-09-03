@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { appendFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { evaluateStop, type StopGateOptions, type StopPayload } from './stop-gate.js'
 
 const USAGE = `probity-graphify stop [options]
@@ -12,6 +14,9 @@ session's source edits have not run green.
   --max-listed N     how many files to itemize (default 12)
   --graph PATH       explicit graphify-out/graph.json
   --cwd PATH         repo root to search for the graph
+  --config PATH      an ES module whose default export is a StopGateOptions
+                     object, for options a flag cannot express (per-family
+                     runners, a runner that groups files by workspace)
   --debug PATH       append each payload and decision as JSONL
 `
 
@@ -28,7 +33,7 @@ async function main(argv: string[]): Promise<number> {
 
   const flags = parseFlags(rest)
   const payload = parsePayload(await readStdin())
-  const options: StopGateOptions = {}
+  const options: StopGateOptions = flags['config'] ? await loadOptions(flags['config']) : {}
   if (flags['depth']) options.depth = Number(flags['depth'])
   if (flags['runner']) options.runner = flags['runner']
   if (flags['max-listed']) options.maxListed = Number(flags['max-listed'])
@@ -56,6 +61,22 @@ async function main(argv: string[]): Promise<number> {
     process.stdout.write(JSON.stringify({ decision: 'block', reason: `Probity: ${decision.reason}` }) + '\n')
   }
   return 0
+}
+
+/**
+ * Options from an ES module, for what flags cannot carry. A runner that has to
+ * group files by workspace, or route Go files to `go test`, is a function; a
+ * string template cannot express it, and a Stop gate that suggests an
+ * unrunnable command is worse than none (#unrunnable).
+ */
+async function loadOptions(path: string): Promise<StopGateOptions> {
+  const url = pathToFileURL(resolve(path)).href
+  const module: unknown = await import(url)
+  const config = (module as { default?: unknown }).default
+  if (typeof config !== 'object' || config === null) {
+    throw new Error(`${path}: expected a default-exported options object`)
+  }
+  return config as StopGateOptions
 }
 
 function parseFlags(argv: readonly string[]): Record<string, string> {
