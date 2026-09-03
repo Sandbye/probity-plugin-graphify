@@ -1,0 +1,53 @@
+{
+  "name": "probity-plugin-graphify",
+  "version": "0.1.0",
+  "description": "Probity rules backed by a graphify code graph: require the tests that reach a change to run before commit, and require a reaching test before touching a source file.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "NOTICE",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/bin.js",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "checks": "pnpm typecheck && pnpm test"
+  },
+  "peerDependencies": {
+    "@nizos/probity": ">=1.10.0"
+  },
+  "devDependencies": {
+    "@nizos/probity": "^1.10.0",
+    "@types/node": "^24.0.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  },
+  "license": "MIT",
+  "bin": {
+    "probity-graphify": "dist/bin.js"
+  },
+  "keywords": [
+    "probity",
+    "graphify",
+    "tdd",
+    "test-impact-analysis",
+    "claude-code",
+    "coding-agent",
+    "regression"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Sandbye/probity-plugin-graphify.git"
+  },
+  "author": "Anton Sandbye (https://github.com/Sandbye)"
+}

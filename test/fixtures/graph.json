@@ -1,0 +1,101 @@
+{
+  "nodes": [
+    {
+      "id": "src_cart",
+      "source_file": "src/cart.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_cart_total",
+      "source_file": "src/cart.ts",
+      "source_location": "L10"
+    },
+    {
+      "id": "src_checkout",
+      "source_file": "src/checkout.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_checkout_pay",
+      "source_file": "src/checkout.ts",
+      "source_location": "L5"
+    },
+    {
+      "id": "src_cart_test",
+      "source_file": "src/cart.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_checkout_test",
+      "source_file": "src/checkout.test.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_orphan",
+      "source_file": "src/orphan.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_util",
+      "source_file": "src/util.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "docs_readme",
+      "source_file": "README.md",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_cart_other",
+      "source_file": "src/cart.ts",
+      "source_location": "L40"
+    },
+    {
+      "id": "src_other_test",
+      "source_file": "src/other.test.ts",
+      "source_location": "L1"
+    }
+  ],
+  "edges": [
+    {
+      "source": "src_cart_test",
+      "target": "src_cart",
+      "relation": "imports_from"
+    },
+    {
+      "source": "src_checkout_pay",
+      "target": "src_cart_total",
+      "relation": "calls"
+    },
+    {
+      "source": "src_checkout",
+      "target": "src_cart",
+      "relation": "imports_from"
+    },
+    {
+      "source": "src_checkout_test",
+      "target": "src_checkout",
+      "relation": "imports_from"
+    },
+    {
+      "source": "src_cart",
+      "target": "src_util",
+      "relation": "imports_from"
+    },
+    {
+      "source": "docs_readme",
+      "target": "src_cart",
+      "relation": "references"
+    },
+    {
+      "source": "src_other_test",
+      "target": "src_cart_other",
+      "relation": "imports"
+    },
+    {
+      "source": "src_cart_test",
+      "target": "src_cart_total",
+      "relation": "imports"
+    }
+  ]
+}

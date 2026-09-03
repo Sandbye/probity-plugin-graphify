@@ -1,0 +1,17 @@
+probity-plugin-graphify
+Copyright (c) 2026 Anton Sandbye
+
+This package reads the graph.json produced by graphify
+(https://github.com/Graphify-Labs/graphify), licensed under Apache-2.0.
+No graphify source is redistributed here. The DEFAULT_RELATIONS constant in
+src/graph.ts mirrors graphify's DEFAULT_AFFECTED_RELATIONS so that
+`graphify affected` and these rules traverse the same edge kinds.
+
+This package is a plugin for Probity (https://github.com/nizos/probity),
+licensed under MIT, Copyright (c) 2026 Nizar Selander. No Probity source is
+redistributed here. The shell-redirect detection in src/changed.ts follows the
+approach used by Probity's own forbidCommandPattern configuration.
+
+The approach and the regression figures cited in README.md come from TDAD
+(https://github.com/pepealonso95/TDAD), licensed under MIT,
+Copyright (c) 2026 Rafael Alonso.

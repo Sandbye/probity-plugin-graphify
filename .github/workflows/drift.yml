@@ -1,0 +1,50 @@
+name: Upstream drift
+
+# probity and graphify each own a contract this package reads: the Rule
+# signature and session-history shape, and the graph.json format. Run against
+# their latest releases weekly so drift surfaces here, not in a user's session.
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+jobs:
+  latest-upstream:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Upgrade to the latest probity
+        run: pnpm add -D @nizos/probity@latest
+
+      - name: Install the latest graphify
+        run: pip install --upgrade graphifyy
+
+      - name: Record the versions under test
+        run: |
+          {
+            echo "probity: $(node -p "require('./node_modules/@nizos/probity/package.json').version")"
+            echo "graphify: $(graphify --version)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - run: pnpm typecheck
+
+      - run: pnpm test
+
+      - name: Contract check against a graph built by the installed graphify
+        run: pnpm build && node scripts/contract-check.mjs
