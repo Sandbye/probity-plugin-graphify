@@ -134,6 +134,50 @@ describe('requireImpactedTests', () => {
     expect(result.kind).toBe('pass')
   })
 
+  it('passes when no configured runner covers the impacted files', async () => {
+    const goOnly = requireImpactedTests({
+      graph,
+      ignoreGit: true,
+      runners: [{ match: /_test\.go$/, command: 'go test ./...' }],
+    })
+    const result = await goOnly(commit, ctx(write('src/cart.ts')))
+    expect(result.kind).toBe('pass')
+    expect(result.reason).toContain('no configured runner covers')
+  })
+
+  it('blocks on the covered files and reports the uncovered ones', async () => {
+    const jsOnly = requireImpactedTests({
+      graph,
+      ignoreGit: true,
+      runners: [{ match: /cart\.test\.ts$/, command: 'npx vitest run {files}' }],
+    })
+    const result = await jsOnly(commit, ctx(write('src/cart.ts')))
+    expect(result.kind).toBe('violation')
+    if (result.kind !== 'violation') return
+    expect(result.reason).toContain('1 test file(s) reach your changes')
+    expect(result.reason).toContain('Run: npx vitest run src/cart.test.ts')
+    expect(result.reason).toContain('Not checked, no configured runner:')
+    expect(result.reason).toContain('src/checkout.test.ts')
+  })
+
+  it('routes each family to its own runner', async () => {
+    const both = requireImpactedTests({
+      graph,
+      ignoreGit: true,
+      runners: [
+        { match: /other\.test\.ts$/, command: 'go test ./...' },
+        { match: /\.test\.ts$/, command: 'npx vitest run {files}' },
+      ],
+    })
+    const result = await both(commit, ctx(write('src/cart.ts')))
+    if (result.kind !== 'violation') throw new Error('expected violation')
+    // Groups are ordered by the first file that matched, not by spec order.
+    expect(result.reason).toContain('go test ./...')
+    expect(result.reason).toContain('npx vitest run')
+    expect(result.reason).toContain(' && ')
+    expect(result.reason).not.toContain('Not checked')
+  })
+
   it('honours a custom runner and gate', async () => {
     const custom = requireImpactedTests({ graph, ignoreGit: true, before: /git push/, runner: 'pytest {files}' })
     expect((await custom(commit, ctx(write('src/cart.ts')))).kind).toBe('pass')

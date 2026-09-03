@@ -3,11 +3,12 @@ import { findGraphFile, loadGraph } from './graph.js'
 import {
   impactedTests,
   lastWriteIndex,
-  suggestCommand,
+  planRun,
   unverified,
   verifyMessage,
   type Event,
   type ImpactOptions,
+  type RunnerSpec,
 } from './impact.js'
 
 export type RequireImpactedTestsOptions = ImpactOptions & {
@@ -18,6 +19,8 @@ export type RequireImpactedTestsOptions = ImpactOptions & {
   cwd?: string
   /** Suggested command; `{files}` is replaced with the impacted test files. */
   runner?: string | ((files: readonly string[]) => string)
+  /** Per-family runners. Impacted files matching none are reported, not blocked. */
+  runners?: readonly RunnerSpec[]
   /** How many impacted files to itemize in the block message. Default 12. */
   maxListed?: number
 }
@@ -63,15 +66,19 @@ export function requireImpactedTests(options: RequireImpactedTestsOptions = {}):
     const outstanding = unverified(history, impacted, since, options, graph.root)
     if (outstanding.length === 0) return { kind: 'pass' }
 
-    const files = outstanding.map((hit) => hit.file)
+    const plan = planRun(outstanding.map((hit) => hit.file), options)
+    if (plan.gated.length === 0) {
+      return { kind: 'pass', reason: `no configured runner covers ${plan.skipped.join(', ')}` }
+    }
+    const gated = outstanding.filter((hit) => plan.gated.includes(hit.file))
+    const lead = `${gated.length} test file(s) reach your changes and have not run green since your last write:`
+    const note =
+      plan.skipped.length > 0
+        ? `\nNot checked, no configured runner: ${plan.skipped.join(', ')}`
+        : ''
     return {
       kind: 'violation',
-      reason: verifyMessage(
-        outstanding,
-        suggestCommand(options.runner, files),
-        options.maxListed ?? 12,
-        `${outstanding.length} test file(s) reach your changes and have not run green since your last write:`,
-      ),
+      reason: verifyMessage(gated, plan.command, options.maxListed ?? 12, lead) + note,
     }
   }
 }

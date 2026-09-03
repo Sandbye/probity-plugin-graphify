@@ -60,37 +60,56 @@ function git(cwd: string, args: readonly string[]): string[] {
  * narrow on an empty answer.
  */
 export function changedRanges(cwd: string, file: string): [number, number][] {
-  const seen = new Set<string>()
-  const ranges: [number, number][] = []
-  for (const args of [
-    ['diff', '-U0', 'HEAD', '--', file],
-    ['diff', '-U0', '--cached', 'HEAD', '--', file],
-  ]) {
-    for (const line of git(cwd, args)) {
-      // @@ -old,count +new,count @@
-      const match = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line)
-      if (!match?.[1]) continue
-      const start = Number(match[1])
-      const count = match[2] === undefined ? 1 : Number(match[2])
-      // A pure deletion reports count 0: the surrounding lines are what changed.
-      const range: [number, number] =
-        count === 0 ? [Math.max(1, start), start + 1] : [start, start + count - 1]
-      // The unstaged and staged diffs overlap, so the same hunk arrives twice.
-      const key = range.join(':')
-      if (seen.has(key)) continue
-      seen.add(key)
-      ranges.push(range)
-    }
-  }
-  return ranges
+  return changedRangesFor(cwd, [file]).get(file) ?? []
 }
 
-/** Changed ranges for several files, skipping those git knows nothing about. */
-export function changedRangesFor(cwd: string, files: readonly string[]): Map<string, [number, number][]> {
+/**
+ * Changed ranges for several files, skipping those git knows nothing about.
+ *
+ * Two git calls for the whole set rather than two per file. Per-file calls put
+ * the gate's cost on the number of changed files (a four-file change already
+ * spent 11 subprocesses and ~200ms), which a large change would make painful.
+ */
+export function changedRangesFor(
+  cwd: string,
+  files: readonly string[],
+): Map<string, [number, number][]> {
+  const wanted = new Set(files)
   const map = new Map<string, [number, number][]>()
-  for (const file of files) {
-    const ranges = changedRanges(cwd, file)
-    if (ranges.length > 0) map.set(file, ranges)
+  const seen = new Set<string>()
+
+  for (const args of [
+    ['diff', '-U0', 'HEAD', '--', ...files],
+    ['diff', '-U0', '--cached', 'HEAD', '--', ...files],
+  ]) {
+    if (files.length === 0) break
+    let current: string | undefined
+    for (const line of git(cwd, args)) {
+      // `+++ b/path` opens each file's section; /dev/null means a deletion.
+      const header = /^\+\+\+ (?:b\/)?(.+)$/.exec(line)
+      if (header?.[1]) {
+        const path = header[1] === '/dev/null' ? undefined : header[1]
+        current = path && wanted.has(path) ? path : undefined
+        continue
+      }
+      if (!current) continue
+      const range = parseHunk(line)
+      if (!range) continue
+      const key = `${current}:${range.join(':')}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      map.set(current, [...(map.get(current) ?? []), range])
+    }
   }
   return map
+}
+
+/** `@@ -old,count +new,count @@` to an inclusive range in the new numbering. */
+function parseHunk(line: string): [number, number] | undefined {
+  const match = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/.exec(line)
+  if (!match?.[1]) return undefined
+  const start = Number(match[1])
+  const count = match[2] === undefined ? 1 : Number(match[2])
+  // A pure deletion reports count 0: the surrounding lines are what changed.
+  return count === 0 ? [Math.max(1, start), start + 1] : [start, start + count - 1]
 }

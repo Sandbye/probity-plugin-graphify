@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { changedFiles, changedRanges, isShellWrite } from './changed.js'
+import { changedFiles, changedRanges, changedRangesFor, isShellWrite } from './changed.js'
 
 describe('isShellWrite', () => {
   it.each([
@@ -107,5 +107,37 @@ describe('changedRanges', () => {
 
   it('is empty outside a repo', () => {
     expect(changedRanges(mkdtempSync(join(tmpdir(), 'pg-bare-')), 'src/a.ts')).toEqual([])
+  })
+
+  it('attributes hunks to the right file when several changed', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pg-multi-'))
+    const run = (...args: string[]) => execFileSync('git', ['-C', dir, ...args], { stdio: 'ignore' })
+    run('init', '-q')
+    run('config', 'user.email', 't@example.com')
+    run('config', 'user.name', 'Test')
+    mkdirSync(join(dir, 'src'))
+    const base = Array.from({ length: 30 }, (_, i) => `const line${i + 1} = ${i + 1}`)
+    for (const name of ['a', 'b', 'c']) writeFileSync(join(dir, `src/${name}.ts`), base.join('\n') + '\n')
+    run('add', '-A')
+    run('commit', '-qm', 'init')
+
+    // one hunk each, at a different line per file
+    const edits: Record<string, number> = { a: 3, b: 15, c: 28 }
+    for (const [name, line] of Object.entries(edits)) {
+      const lines = [...base]
+      lines[line - 1] = `const changed = ${line}`
+      writeFileSync(join(dir, `src/${name}.ts`), lines.join('\n') + '\n')
+    }
+    // stage one of them, so both diff passes contribute
+    execFileSync('git', ['-C', dir, 'add', 'src/b.ts'], { stdio: 'ignore' })
+
+    const ranges = changedRangesFor(dir, ['src/a.ts', 'src/b.ts', 'src/c.ts'])
+    expect(ranges.get('src/a.ts')).toEqual([[3, 3]])
+    expect(ranges.get('src/b.ts')).toEqual([[15, 15]])
+    expect(ranges.get('src/c.ts')).toEqual([[28, 28]])
+  })
+
+  it('asks for nothing when given no files', () => {
+    expect(changedRangesFor(mkdtempSync(join(tmpdir(), 'pg-none-')), []).size).toBe(0)
   })
 })

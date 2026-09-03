@@ -143,6 +143,49 @@ function stripTrailingSlash(token: string): string {
   return token.endsWith('/') ? token.slice(0, -1) : token
 }
 
+/**
+ * A runner for one family of test files. Files matching no spec are not gated:
+ * blocking on a file with no way to run it produces an unsatisfiable demand,
+ * and the cheapest way out of one is to delete the test (#unrunnable).
+ */
+export type RunnerSpec = {
+  match: RegExp
+  command: string | ((files: readonly string[]) => string)
+}
+
+export type RunPlan = {
+  command: string
+  /** Files a runner covers, so blocking on them is actionable. */
+  gated: string[]
+  /** Files no runner covers. Reported, never blocked on. */
+  skipped: string[]
+}
+
+/** Split files across the configured runners, keeping the uncovered ones aside. */
+export function planRun(
+  files: readonly string[],
+  options: { runner?: string | ((files: readonly string[]) => string); runners?: readonly RunnerSpec[] } = {},
+): RunPlan {
+  const specs = options.runners
+  if (!specs || specs.length === 0) {
+    return { command: suggestCommand(options.runner, files), gated: [...files], skipped: [] }
+  }
+  const groups = new Map<RunnerSpec, string[]>()
+  const skipped: string[] = []
+  for (const file of files) {
+    const spec = specs.find((candidate) => candidate.match.test(file))
+    if (!spec) {
+      skipped.push(file)
+      continue
+    }
+    groups.set(spec, [...(groups.get(spec) ?? []), file])
+  }
+  const command = [...groups]
+    .map(([spec, group]) => suggestCommand(spec.command, group))
+    .join(' && ')
+  return { command, gated: [...groups.values()].flat(), skipped }
+}
+
 /** `{files}` substitution for a runner template. */
 export function suggestCommand(
   runner: string | ((files: readonly string[]) => string) | undefined,

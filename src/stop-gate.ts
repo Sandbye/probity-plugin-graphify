@@ -2,11 +2,12 @@ import { findGraphFile, loadGraph } from './graph.js'
 import {
   impactedTests,
   lastWriteIndex,
-  suggestCommand,
+  planRun,
   unverified,
   verifyMessage,
   type Event,
   type ImpactOptions,
+  type RunnerSpec,
 } from './impact.js'
 import { readTranscript } from './transcript.js'
 
@@ -14,6 +15,8 @@ export type StopGateOptions = ImpactOptions & {
   cwd?: string
   graph?: string
   runner?: string | ((files: readonly string[]) => string)
+  /** Per-family runners. Impacted files matching none are reported, not blocked. */
+  runners?: readonly RunnerSpec[]
   maxListed?: number
 }
 
@@ -62,14 +65,21 @@ export function decide(events: readonly Event[], options: StopGateOptions = {}, 
   const outstanding = unverified(events, impacted, since, options, graph.root)
   if (outstanding.length === 0) return { kind: 'allow' }
 
-  const files = outstanding.map((hit) => hit.file)
+  const plan = planRun(outstanding.map((hit) => hit.file), options)
+  if (plan.gated.length === 0) {
+    return { kind: 'allow', reason: `no configured runner covers ${plan.skipped.join(', ')}` }
+  }
+  const gated = outstanding.filter((hit) => plan.gated.includes(hit.file))
+  const note =
+    plan.skipped.length > 0 ? `\nNot checked, no configured runner: ${plan.skipped.join(', ')}` : ''
   return {
     kind: 'block',
-    reason: verifyMessage(
-      outstanding,
-      suggestCommand(options.runner, files),
-      options.maxListed ?? 12,
-      `${outstanding.length} of ${impacted.length} test file(s) that reach your changes have not run green since your last edit:`,
-    ),
+    reason:
+      verifyMessage(
+        gated,
+        plan.command,
+        options.maxListed ?? 12,
+        `${gated.length} of ${impacted.length} test file(s) that reach your changes have not run green since your last edit:`,
+      ) + note,
   }
 }
