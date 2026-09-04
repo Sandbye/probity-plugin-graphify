@@ -21,8 +21,14 @@ export type ImpactOptions = {
   testRunner?: RegExp
   /** Ignore the working tree and use transcript writes only. */
   ignoreGit?: boolean
-  /** Seed traversal from whole files instead of the changed symbols. */
-  ignoreRanges?: boolean
+  /**
+   * Seed traversal from the changed symbols rather than the whole file.
+   * Off by default: measured against 51 real tRPC commits it cost 9 points of
+   * recall (82% -> 73%) to avoid 6.6 test files, and raised the commits where
+   * no relevant test was found from 5 to 8. Cheaper is the wrong direction for
+   * a guard (#narrow-recall).
+   */
+  narrow?: boolean
 }
 
 // `vitest`/`pytest` with no file arguments runs everything; `npm test` and friends too.
@@ -51,9 +57,10 @@ export function impactedTests(graph: Graph, events: readonly Event[], options: I
     if (isTestFile(file, options.testFile)) hits.set(file, { file, depth: 0, via: 'written' })
     else sources.push(file)
   }
-  // Narrow the seed to the symbols the diff actually touched where git can say.
+  // Narrowing to the changed symbols is opt-in: it loses more relevant tests
+  // than it saves runtime.
   const ranges =
-    options.ignoreGit || options.ignoreRanges ? undefined : changedRangesFor(graph.root, sources)
+    options.ignoreGit || !options.narrow ? undefined : changedRangesFor(graph.root, sources)
   for (const hit of reachingTests(graph, sources, { ...options, ranges })) {
     if (!hits.has(hit.file)) hits.set(hit.file, hit)
   }

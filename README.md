@@ -122,20 +122,32 @@ Gates a command (default `git commit`) on every test file that reaches this sess
 | `maxListed` | `12` | how many files to itemize |
 | `graph` | nearest `graphify-out/graph.json` | explicit graph path |
 | `ignoreGit` | `false` | use transcript writes only |
-| `ignoreRanges` | `false` | seed whole files instead of changed symbols |
+| `narrow` | `false` | seed from the changed symbols instead of whole files |
 
 `depth` counts **file boundaries crossed**, not edges. A call chain inside one file is part of the same change surface, so it costs nothing, and `depth: 1` keeps meaning "the modules that use this directly" wherever in the file the edit landed. Use `depth: 1` on repos with hub modules: in tRPC, one file in `packages/server/src/observable/` reaches 22 test files at depth 1 and 79 at depth 2, out of 170.
 
-Seeding is symbol-level. graphify resolves an import to the symbol imported, so a change confined to one function does not drag in the tests that use another. Changed line ranges come from `git diff -U0`, and every unresolvable case widens to the whole file rather than narrowing: a change above the first symbol is module header and can affect anything, and a missed test is worse than a spare one. Across tRPC's 134 multi-symbol source files with at least one reaching test, narrowing can cut the set in 78 of them, summed 733 test files down to 234 in the best case. Some concrete ones:
+### Selection quality, measured
 
-| file | whole-file | one symbol |
-| --- | --- | --- |
-| `unstable-core-do-not-import/initTRPC.ts` | 119 | 4 |
-| `createTRPCClient.ts` | 31 | 2 |
-| `observable/observable.ts` | 22 | 2 |
-| `unstable-core-do-not-import/router.ts` (31 symbols) | 17 | 1 |
+`demo/benchmark-recall.mjs` scores selection against real history. When a commit changes source *and* test files, the tests its author touched are tests a human judged relevant, so the question becomes: from the source diff alone, how much of that judgement does the graph recover, and how many test files does it make the agent run?
 
-The caveat, measured on the real tRPC #7468 fix: it added an import, which lands in the header, so it widened to the whole file and narrowing gained nothing. Symbol-level seeding pays on edits inside one function, not on edits that change a module's imports.
+51 tRPC commits, 177 test files in the suite:
+
+| selection | recall of author-chosen tests | commits with nothing found | test files run |
+| --- | --- | --- | --- |
+| sibling naming (`x.ts` -> `x.test.ts`) | 8% | - | 0.5 |
+| graph, depth 1 | 58% | 18 of 51 | 9.4 (5% of suite) |
+| **graph, depth 2** | **82%** | **5 of 51** | **49.8 (28% of suite)** |
+| graph, depth 2, `narrow` | 73% | 8 of 51 | 43.2 |
+
+Three things to take from that, in order of how much they should change your mind:
+
+1. **A graph is worth having.** Naming convention recovers 8% of what a human would pick. Depth 2 recovers 82%.
+2. **This is not safe selection.** At depth 2, 5 of 51 changes would have had no relevant test named. Use it to make the agent run the tests it would otherwise skip, not as a claim that a green gate means no regression.
+3. **`narrow` is off by default because the benchmark said so.** Seeding from the changed symbols looked like the obvious win, and it cost 9 points of recall to avoid 6.6 test files. Cheaper is the wrong direction for a guard.
+
+Caveat on the ground truth: it credits only tests the author touched. A test they should have touched and did not is invisible, and a test they edited for an unrelated reason counts as a miss. It measures agreement with human judgement, not regression prevention.
+
+`depth` counts **file boundaries crossed**, not edges. A call chain inside one file is part of the same change surface, so it costs nothing, and `depth: 1` keeps meaning "the modules that use this directly" wherever in the file the edit landed.
 
 ### `requireReachingTest(options?)`
 

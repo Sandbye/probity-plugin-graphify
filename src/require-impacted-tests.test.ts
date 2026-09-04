@@ -178,6 +178,15 @@ describe('requireImpactedTests', () => {
     expect(result.reason).not.toContain('Not checked')
   })
 
+  it('seeds from whole files unless narrowing is asked for', async () => {
+    // src/cart.ts holds two symbols with different tests; whole-file seeding
+    // must keep both, since a missed test is worse than a spare one.
+    const result = await rule(commit, ctx(write('src/cart.ts')))
+    if (result.kind !== 'violation') throw new Error('expected violation')
+    expect(result.reason).toContain('src/cart.test.ts')
+    expect(result.reason).toContain('src/other.test.ts')
+  })
+
   it('honours a custom runner and gate', async () => {
     const custom = requireImpactedTests({ graph, ignoreGit: true, before: /git push/, runner: 'pytest {files}' })
     expect((await custom(commit, ctx(write('src/cart.ts')))).kind).toBe('pass')
